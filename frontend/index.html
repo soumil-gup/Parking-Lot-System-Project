@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Parking Lot Management System</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #171a23;
+    --border: #262a36;
+    --accent: #4f8cff;
+    --green: #35c37c;
+    --red: #ff5d5d;
+    --text: #e7e9ee;
+    --muted: #8a90a2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px;
+  }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  p.sub { color: var(--muted); margin-top: 0; margin-bottom: 24px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    max-width: 1100px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card h2 { margin-top: 0; font-size: 16px; color: var(--accent); }
+
+  input, select, button {
+    width: 100%;
+    padding: 10px 12px;
+    margin-top: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #10131b;
+    color: var(--text);
+    font-size: 14px;
+  }
+  button {
+    background: var(--accent);
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 14px;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary { background: var(--red); }
+
+  .msg { margin-top: 10px; font-size: 13px; min-height: 18px; }
+  .msg.ok { color: var(--green); }
+  .msg.err { color: var(--red); }
+
+  .stats { display: flex; gap: 16px; margin-bottom: 16px; }
+  .stat { flex: 1; background: #10131b; border-radius: 8px; padding: 12px; text-align: center; }
+  .stat .num { font-size: 26px; font-weight: 700; }
+  .stat .label { font-size: 12px; color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  .badge { padding: 2px 8px; border-radius: 20px; font-size: 11px; }
+  .badge.CAR { background: #1e3a5f; color: #7fb2ff; }
+  .badge.BIKE { background: #1e3a2f; color: #6fdd9e; }
+  .badge.TRUCK { background: #3a2a1e; color: #ffb37f; }
+
+  .full-width { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+
+<h1>Parking Lot Management System</h1>
+<p class="sub">C++ backend (Crow + SQLite) · REST API · Live dashboard</p>
+
+<div class="grid">
+
+  <div class="card">
+    <h2>Park a Vehicle</h2>
+    <input id="parkNumber" placeholder="Vehicle Number e.g. MH20AB1234" />
+    <select id="parkType">
+      <option value="CAR">Car</option>
+      <option value="BIKE">Bike</option>
+      <option value="TRUCK">Truck</option>
+    </select>
+    <button onclick="parkVehicle()">Park Vehicle</button>
+    <div class="msg" id="parkMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Release a Vehicle</h2>
+    <input id="releaseNumber" placeholder="Vehicle Number e.g. MH20AB1234" />
+    <button class="secondary" onclick="releaseVehicle()">Release & Calculate Bill</button>
+    <div class="msg" id="releaseMsg"></div>
+  </div>
+
+  <div class="card full-width">
+    <h2>Lot Status</h2>
+    <div class="stats">
+      <div class="stat"><div class="num" id="freeCount">-</div><div class="label">Free Slots</div></div>
+      <div class="stat"><div class="num" id="occCount">-</div><div class="label">Occupied</div></div>
+      <div class="stat"><div class="num" id="totalCount">-</div><div class="label">Total Slots</div></div>
+    </div>
+    <table>
+      <thead><tr><th>Slot</th><th>Vehicle</th><th>Type</th><th>Parked Since</th></tr></thead>
+      <tbody id="slotsBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card full-width">
+    <h2>Recent History</h2>
+    <table>
+      <thead><tr><th>Vehicle</th><th>Slot</th><th>Type</th><th>Status</th><th>Amount</th></tr></thead>
+      <tbody id="historyBody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const API = "";
+
+async function parkVehicle() {
+  const vehicle_number = document.getElementById('parkNumber').value.trim();
+  const type = document.getElementById('parkType').value;
+  const msgEl = document.getElementById('parkMsg');
+  if (!vehicle_number) { msgEl.textContent = "Enter a vehicle number."; msgEl.className = "msg err"; return; }
+
+  const res = await fetch(`${API}/api/park`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ vehicle_number, type })
+  });
+  const data = await res.json();
+  msgEl.textContent = data.success ? `${data.message} (Slot ${data.slot_id})` : data.message;
+  msgEl.className = "msg " + (data.success ? "ok" : "err");
+  if (data.success) document.getElementById('parkNumber').value = "";
+  refresh();
+}
+
+async function releaseVehicle() {
+  const vehicle_number = document.getElementById('releaseNumber').value.trim();
+  const msgEl = document.getElementById('releaseMsg');
+  if (!vehicle_number) { msgEl.textContent = "Enter a vehicle number."; msgEl.className = "msg err"; return; }
+
+  const res = await fetch(`${API}/api/release`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ vehicle_number })
+  });
+  const data = await res.json();
+  msgEl.textContent = data.success
+    ? `Released. Duration: ${data.duration_minutes} min. Amount: ₹${data.amount}`
+    : data.message;
+  msgEl.className = "msg " + (data.success ? "ok" : "err");
+  if (data.success) document.getElementById('releaseNumber').value = "";
+  refresh();
+}
+
+function timeAgo(epoch) {
+  if (!epoch) return "-";
+  const d = new Date(epoch * 1000);
+  return d.toLocaleString();
+}
+
+async function refresh() {
+  const statusRes = await fetch(`${API}/api/status`);
+  const status = await statusRes.json();
+  document.getElementById('freeCount').textContent = status.free_slots;
+  document.getElementById('totalCount').textContent = status.total_slots;
+  document.getElementById('occCount').textContent = status.total_slots - status.free_slots;
+
+  const occupied = status.slots.filter(s => s.occupied);
+  document.getElementById('slotsBody').innerHTML = occupied.length
+    ? occupied.map(s => `
+        <tr>
+          <td>#${s.id}</td>
+          <td>${s.vehicle_number}</td>
+          <td><span class="badge ${s.type}">${s.type}</span></td>
+          <td>${timeAgo(s.entry_time)}</td>
+        </tr>`).join("")
+    : `<tr><td colspan="4" style="color:#8a90a2">No vehicles currently parked.</td></tr>`;
+
+  const histRes = await fetch(`${API}/api/history`);
+  const history = await histRes.json();
+  document.getElementById('historyBody').innerHTML = history.length
+    ? history.map(h => `
+        <tr>
+          <td>${h.vehicle_number}</td>
+          <td>#${h.slot_id}</td>
+          <td><span class="badge ${h.type}">${h.type}</span></td>
+          <td>${h.status}</td>
+          <td>${h.status === 'COMPLETED' ? '₹' + h.amount.toFixed(2) : '-'}</td>
+        </tr>`).join("")
+    : `<tr><td colspan="5" style="color:#8a90a2">No history yet.</td></tr>`;
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+
+</body>
+</html>
